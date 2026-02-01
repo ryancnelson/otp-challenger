@@ -135,23 +135,6 @@ except Exception:
   fi
 fi
 
-# Validate required credentials based on code type
-if [ "$CODE_TYPE" = "totp" ] && [ -z "$SECRET" ]; then
-  echo "ERROR: OTP_SECRET not set. Configure in environment or ~/.openclaw/config.yaml" >&2
-  exit 2
-fi
-
-if [ "$CODE_TYPE" = "yubikey" ]; then
-  if [ -z "$YUBIKEY_CLIENT_ID" ]; then
-    echo "ERROR: YUBIKEY_CLIENT_ID not set. Configure in environment or ~/.openclaw/config.yaml" >&2
-    exit 2
-  fi
-  if [ -z "$YUBIKEY_SECRET_KEY" ]; then
-    echo "ERROR: YUBIKEY_SECRET_KEY not set. Configure in environment or ~/.openclaw/config.yaml" >&2
-    exit 2
-  fi
-fi
-
 # Get YubiKey credentials from environment or config
 YUBIKEY_CLIENT_ID="${YUBIKEY_CLIENT_ID:-}"
 YUBIKEY_SECRET_KEY="${YUBIKEY_SECRET_KEY:-}"
@@ -185,6 +168,23 @@ try:
 except Exception:
     pass
 " 2>/dev/null)
+  fi
+fi
+
+# Validate required credentials based on code type
+if [ "$CODE_TYPE" = "totp" ] && [ -z "$SECRET" ]; then
+  echo "ERROR: OTP_SECRET not set. Configure in environment or ~/.openclaw/config.yaml" >&2
+  exit 2
+fi
+
+if [ "$CODE_TYPE" = "yubikey" ]; then
+  if [ -z "$YUBIKEY_CLIENT_ID" ]; then
+    echo "ERROR: YUBIKEY_CLIENT_ID not set. Configure in environment or ~/.openclaw/config.yaml" >&2
+    exit 2
+  fi
+  if [ -z "$YUBIKEY_SECRET_KEY" ]; then
+    echo "ERROR: YUBIKEY_SECRET_KEY not set. Configure in environment or ~/.openclaw/config.yaml" >&2
+    exit 2
   fi
 fi
 
