@@ -74,6 +74,21 @@ reset_failures() {
   # Just ensure we remove the failure count
 }
 
+# Detect code type based on format
+# Returns: "totp", "yubikey", or "unknown"
+detect_code_type() {
+  local code="$1"
+  # YubiKey OTP: exactly 44 ModHex characters (cbdefghijklnrtuv)
+  if [[ "$code" =~ ^[cbdefghijklnrtuv]{44}$ ]]; then
+    echo "yubikey"
+  # TOTP: exactly 6 digits
+  elif [[ "$code" =~ ^[0-9]{6}$ ]]; then
+    echo "totp"
+  else
+    echo "unknown"
+  fi
+}
+
 USER_ID="${1}"
 CODE="${2}"
 
