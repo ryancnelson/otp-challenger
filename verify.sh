@@ -201,13 +201,15 @@ if [ "$CODE_TYPE" = "totp" ]; then
   fi
 fi
 
-# Check if oathtool is available
-if ! command -v oathtool &> /dev/null; then
-  echo "ERROR: oathtool not found. Install with:" >&2
-  echo "  macOS:  brew install oath-toolkit" >&2
-  echo "  Fedora: sudo dnf install oathtool" >&2
-  echo "  Ubuntu: sudo apt-get install oathtool" >&2
-  exit 2
+# Check if oathtool is available (only needed for TOTP)
+if [ "$CODE_TYPE" = "totp" ]; then
+  if ! command -v oathtool &> /dev/null; then
+    echo "ERROR: oathtool not found. Install with:" >&2
+    echo "  macOS:  brew install oath-toolkit" >&2
+    echo "  Fedora: sudo dnf install oathtool" >&2
+    echo "  Ubuntu: sudo apt-get install oathtool" >&2
+    exit 2
+  fi
 fi
 
 # Set up state file and check rate limiting BEFORE TOTP validation
