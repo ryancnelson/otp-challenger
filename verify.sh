@@ -89,6 +89,98 @@ detect_code_type() {
   fi
 }
 
+# Validate YubiKey OTP against Yubico Cloud API
+# Returns: 0 for valid, 1 for invalid, 2 for config/network error
+validate_yubikey() {
+  local otp="$1"
+  local client_id="$2"
+  local secret_key_b64="$3"
+
+  # Decode the base64-encoded secret key (Yubico provides it base64-encoded)
+  local secret_key
+  secret_key=$(printf '%s' "$secret_key_b64" | base64 -d 2>/dev/null)
+  if [ -z "$secret_key" ]; then
+    echo "ERROR: Failed to decode YUBIKEY_SECRET_KEY (must be valid base64)" >&2
+    return 2
+  fi
+
+  # Generate random nonce (16 chars, alphanumeric)
+  local nonce
+  nonce=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
+
+  # Build parameters for signing (alphabetically sorted)
+  local params="id=${client_id}&nonce=${nonce}&otp=${otp}"
+
+  # Generate HMAC-SHA1 signature using decoded secret key
+  local signature
+  signature=$(printf '%s' "$params" | openssl dgst -sha1 -hmac "$secret_key" -binary | base64)
+
+  # URL-encode the signature (+ and / and = need encoding)
+  local signature_encoded
+  signature_encoded=$(printf '%s' "$signature" | sed 's/+/%2B/g; s/\//%2F/g; s/=/%3D/g')
+
+  # Call Yubico API
+  local response
+  response=$(curl -s --max-time 10 "https://api.yubico.com/wsapi/2.0/verify?${params}&h=${signature_encoded}" 2>/dev/null)
+
+  if [ -z "$response" ]; then
+    echo "ERROR: Failed to contact Yubico API (network error or timeout)" >&2
+    return 2
+  fi
+
+  # Parse response fields (format: key=value per line)
+  local resp_status resp_nonce resp_otp
+  resp_status=$(echo "$response" | grep -E '^status=' | cut -d'=' -f2 | tr -d '\r')
+  resp_nonce=$(echo "$response" | grep -E '^nonce=' | cut -d'=' -f2 | tr -d '\r')
+  resp_otp=$(echo "$response" | grep -E '^otp=' | cut -d'=' -f2 | tr -d '\r')
+
+  # Verify nonce matches (prevents replay attacks on API responses)
+  if [ "$resp_nonce" != "$nonce" ]; then
+    echo "ERROR: YubiKey API nonce mismatch (possible MITM attack)" >&2
+    return 2
+  fi
+
+  # Verify OTP in response matches what we sent
+  if [ "$resp_otp" != "$otp" ]; then
+    echo "ERROR: YubiKey API OTP mismatch in response" >&2
+    return 2
+  fi
+
+  case "$resp_status" in
+    OK)
+      return 0
+      ;;
+    REPLAYED_OTP)
+      echo "❌ YubiKey OTP already used (replay attack prevented)" >&2
+      return 1
+      ;;
+    BAD_OTP)
+      echo "❌ Invalid YubiKey OTP" >&2
+      return 1
+      ;;
+    BAD_SIGNATURE)
+      echo "ERROR: YubiKey API signature mismatch (check YUBIKEY_SECRET_KEY)" >&2
+      return 2
+      ;;
+    NO_SUCH_CLIENT)
+      echo "ERROR: Invalid YUBIKEY_CLIENT_ID" >&2
+      return 2
+      ;;
+    MISSING_PARAMETER|OPERATION_NOT_ALLOWED)
+      echo "ERROR: YubiKey API request error: $resp_status" >&2
+      return 2
+      ;;
+    BACKEND_ERROR|NOT_ENOUGH_ANSWERS)
+      echo "ERROR: Yubico API backend error. Try again." >&2
+      return 2
+      ;;
+    *)
+      echo "ERROR: Unexpected YubiKey API response: $resp_status" >&2
+      return 2
+      ;;
+  esac
+}
+
 USER_ID="${1}"
 CODE="${2}"
 
