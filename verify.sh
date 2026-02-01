@@ -188,15 +188,17 @@ except Exception:
   fi
 fi
 
-# Validate secret format (base32: A-Z, 2-7, optional = padding, 16-128 chars)
-if [ "${#SECRET}" -lt 16 ] || [ "${#SECRET}" -gt 128 ]; then
-  echo "ERROR: Secret length must be 16-128 characters" >&2
-  exit 2
-fi
+# Validate secret format for TOTP (base32: A-Z, 2-7, optional = padding, 16-128 chars)
+if [ "$CODE_TYPE" = "totp" ]; then
+  if [ "${#SECRET}" -lt 16 ] || [ "${#SECRET}" -gt 128 ]; then
+    echo "ERROR: Secret length must be 16-128 characters" >&2
+    exit 2
+  fi
 
-if ! [[ "$SECRET" =~ ^[A-Z2-7]+=*$ ]]; then
-  echo "ERROR: Secret must be base32 encoded (A-Z, 2-7, optional = padding)" >&2
-  exit 2
+  if ! [[ "$SECRET" =~ ^[A-Z2-7]+=*$ ]]; then
+    echo "ERROR: Secret must be base32 encoded (A-Z, 2-7, optional = padding)" >&2
+    exit 2
+  fi
 fi
 
 # Check if oathtool is available
