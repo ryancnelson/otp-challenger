@@ -439,6 +439,15 @@ LOCK_FILE="$STATE_FILE.lock"
 
 ) 200>"$LOCK_FILE"
 
-audit_log "VERIFY" "$USER_ID" "VERIFY_SUCCESS"
-echo "✅ OTP verified for $USER_ID (valid for $INTERVAL_HOURS hours)"
+if [ "$CODE_TYPE" = "yubikey" ]; then
+  audit_log "VERIFY" "$USER_ID" "YUBIKEY_SUCCESS:$YUBIKEY_PUBLIC_ID"
+else
+  audit_log "VERIFY" "$USER_ID" "TOTP_SUCCESS"
+fi
+
+if [ "$CODE_TYPE" = "yubikey" ]; then
+  echo "✅ YubiKey verified for $USER_ID (valid for $INTERVAL_HOURS hours)"
+else
+  echo "✅ OTP verified for $USER_ID (valid for $INTERVAL_HOURS hours)"
+fi
 exit 0
