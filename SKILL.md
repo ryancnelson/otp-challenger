@@ -257,6 +257,8 @@ No secrets are stored in state—only timestamps.
 
 ## Examples
 
+**These are all optional.** The core skill is just `verify.sh` and `check-status.sh`. Everything below shows how strict you *could* get - interceptors, failure hooks, cron expiry - but none of it runs unless you set it up.
+
 ### Deploy Command with OTP
 
 ```bash
