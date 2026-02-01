@@ -106,6 +106,60 @@ security:
     secret: "op://vault/OpenClaw OTP/totp"
 ```
 
+### YubiKey Setup (Alternative to TOTP)
+
+If you have a YubiKey, you can use touch-to-verify instead of typing 6-digit codes.
+
+#### 1. Get Yubico API Credentials
+
+1. Go to **https://upgrade.yubico.com/getapikey/**
+2. Enter your email address
+3. Touch your YubiKey to generate an OTP in the form field
+4. Submit — you'll receive a **Client ID** and **Secret Key**
+
+**Troubleshooting "Invalid OTP" during registration:**
+
+If Yubico's site rejects your OTP, your key may not be registered with Yubico's cloud:
+
+1. Install **YubiKey Manager** from https://www.yubico.com/support/download/yubikey-manager/
+2. Open it, go to **Applications → OTP → Configure Slot 1**
+3. Select **Yubico OTP** and check **"Upload to Yubico"**
+4. This re-registers your key with Yubico's servers
+5. Try getting API credentials again
+
+#### 2. Configure Credentials
+
+**Option A: In your OpenClaw config**
+```yaml
+# ~/.openclaw/config.yaml
+security:
+  yubikey:
+    clientId: "12345"
+    secretKey: "your-base64-secret-key"
+```
+
+**Option B: In environment variables**
+```bash
+export YUBIKEY_CLIENT_ID="12345"
+export YUBIKEY_SECRET_KEY="your-base64-secret-key"
+```
+
+#### 3. Test YubiKey Verification
+
+```bash
+# Touch your YubiKey when prompted
+./verify.sh "testuser" "cccccccccccc..."  # paste YubiKey output
+# Should show: ✅ YubiKey verified for testuser (valid for 24 hours)
+```
+
+#### Using Both TOTP and YubiKey
+
+You can configure both methods. The script auto-detects which to use based on the code format:
+- **6 digits** → TOTP validation
+- **44 characters** → YubiKey validation
+
+This lets you use TOTP on your phone and YubiKey at your desk.
+
 ### 4. Test Your Setup
 
 After configuring the secret, test that everything works:
