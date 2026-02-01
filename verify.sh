@@ -344,30 +344,53 @@ if [ -f "$STATE_FILE" ]; then
   fi
 fi
 
-# Validate the code using oathtool
-EXPECTED=$(oathtool --totp -b "$SECRET" 2>/dev/null)
-if [ "$?" -ne 0 ]; then
-  echo "ERROR: Failed to generate TOTP. Check secret format (base32)." >&2
-  exit 2
-fi
+# Validate based on code type
+if [ "$CODE_TYPE" = "totp" ]; then
+  # Validate the TOTP code using oathtool
+  EXPECTED=$(oathtool --totp -b "$SECRET" 2>/dev/null)
+  if [ "$?" -ne 0 ]; then
+    echo "ERROR: Failed to generate TOTP. Check secret format (base32)." >&2
+    exit 2
+  fi
 
-if [ "$CODE" != "$EXPECTED" ]; then
-  # Try previous and next windows for clock skew
-  # Use relative time in seconds: -30 for previous window, +30 for next
-  NOW=$(date +%s)
-  EXPECTED_PREV=$(oathtool --totp -b "$SECRET" -N "@$((NOW - 30))" 2>/dev/null || true)
-  EXPECTED_NEXT=$(oathtool --totp -b "$SECRET" -N "@$((NOW + 30))" 2>/dev/null || true)
+  if [ "$CODE" != "$EXPECTED" ]; then
+    # Try previous and next windows for clock skew
+    NOW=$(date +%s)
+    EXPECTED_PREV=$(oathtool --totp -b "$SECRET" -N "@$((NOW - 30))" 2>/dev/null || true)
+    EXPECTED_NEXT=$(oathtool --totp -b "$SECRET" -N "@$((NOW + 30))" 2>/dev/null || true)
 
-  if [ "$CODE" != "$EXPECTED_PREV" ] && [ "$CODE" != "$EXPECTED_NEXT" ]; then
+    if [ "$CODE" != "$EXPECTED_PREV" ] && [ "$CODE" != "$EXPECTED_NEXT" ]; then
+      FAIL_NOW_MS=$(date +%s)000
+      record_failure "$USER_ID" "$FAIL_NOW_MS"
+      NEW_FAILURE_COUNT=$(jq -r --arg userId "$USER_ID" '.failureCounts[$userId].count // 0' "$STATE_FILE")
+      audit_log "VERIFY" "$USER_ID" "TOTP_FAIL"
+      run_failure_hook "VERIFY_FAIL" "$USER_ID" "$NEW_FAILURE_COUNT"
+      echo "❌ Invalid OTP code" >&2
+      exit 1
+    fi
+  fi
+
+elif [ "$CODE_TYPE" = "yubikey" ]; then
+  # Extract public ID for audit logging (first 12 characters)
+  YUBIKEY_PUBLIC_ID="${CODE:0:12}"
+
+  # Validate against Yubico API
+  validate_yubikey "$CODE" "$YUBIKEY_CLIENT_ID" "$YUBIKEY_SECRET_KEY"
+  YUBIKEY_RESULT=$?
+
+  if [ "$YUBIKEY_RESULT" -eq 2 ]; then
+    # Configuration/API error
+    exit 2
+  elif [ "$YUBIKEY_RESULT" -eq 1 ]; then
+    # Invalid OTP
     FAIL_NOW_MS=$(date +%s)000
     record_failure "$USER_ID" "$FAIL_NOW_MS"
-    # Get updated failure count for hook
     NEW_FAILURE_COUNT=$(jq -r --arg userId "$USER_ID" '.failureCounts[$userId].count // 0' "$STATE_FILE")
-    audit_log "VERIFY" "$USER_ID" "VERIFY_FAIL"
+    audit_log "VERIFY" "$USER_ID" "YUBIKEY_FAIL:$YUBIKEY_PUBLIC_ID"
     run_failure_hook "VERIFY_FAIL" "$USER_ID" "$NEW_FAILURE_COUNT"
-    echo "❌ Invalid OTP code" >&2
     exit 1
   fi
+  # YUBIKEY_RESULT=0 means success, continue to update state
 fi
 
 # Code is valid - update state
